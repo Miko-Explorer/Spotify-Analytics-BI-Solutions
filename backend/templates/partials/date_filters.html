@@ -1,0 +1,11 @@
+<details class="filter-disclosure" id="filter-disclosure" open>
+ <summary class="filter-summary"><span>Dashboard filters</span><span class="filter-summary-meta" id="filter-summary-meta">Show or hide available controls</span></summary>
+ <div class="controls" aria-label="Dashboard filters">
+  <label class="filter-item" id="country-filter">Country<select id="country" aria-label="Choose country"><option value="">Loading available markets…</option></select></label>
+  {% if show_scope %}<label class="filter-item" id="scope-filter">Chart scope<select id="scope" aria-label="Choose chart scope"><option value="daily">Daily Songs</option><option value="yearly">Global Yearly Aggregate</option></select></label>{% endif %}
+  <label class="filter-item">Date range<select id="period" aria-label="Choose date range"><option value="all">Entire chart history</option><option value="30">Latest 30 days</option><option value="90">Latest 90 days</option><option value="365">Latest 365 days</option><option value="custom">Custom range</option></select></label>
+  <div class="custom-range" id="custom-range" hidden><label class="filter-item">From<input id="start-date" type="date"></label><label class="filter-item">To<input id="end-date" type="date"></label><button type="button" class="primary-button" id="apply-dates">Apply</button></div>
+  <button type="button" class="secondary-button" id="reset-filters">Reset filters</button>
+ </div>
+ <p class="filter-note" id="filter-note" role="status" aria-live="polite"></p>
+</details>

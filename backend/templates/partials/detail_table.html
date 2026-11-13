@@ -1,0 +1,14 @@
+<section class="card detail-section span-12" aria-labelledby="detail-title">
+ <details id="detail-explorer" open>
+  <summary class="detail-summary"><span><strong id="detail-title">{{ heading }}</strong><small>{{ description }}</small></span><span class="detail-expand-text">Expand / collapse details</span></summary>
+  <div class="detail-actions">
+   <label class="filter-item" for="detail-search">Search records<input id="detail-search" type="search" placeholder="Search track, artist or label" maxlength="100" autocomplete="off"></label>
+   <label class="filter-item" for="detail-page-size">Rows per page<select id="detail-page-size"><option value="10">10</option><option value="20" selected>20</option><option value="50">50</option></select></label>
+   <button type="button" class="secondary-button" id="detail-export">Export current page (CSV)</button>
+  </div>
+  <div id="detail-status" class="detail-status" role="status" aria-live="polite">Loading detail records…</div>
+  <div id="detail-table" class="table-wrap detail-scroll" tabindex="0" aria-label="Detailed warehouse records"></div>
+  <div class="detail-footer"><button type="button" class="secondary-button" id="detail-prev">Previous</button><span id="detail-page-number">Page 1</span><button type="button" class="secondary-button" id="detail-next">Next</button></div>
+  <p class="detail-note" id="detail-note"></p>
+ </details>
+</section>

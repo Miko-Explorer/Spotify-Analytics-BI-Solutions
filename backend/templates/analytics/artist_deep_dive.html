@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block eyebrow %}ARTIST INTELLIGENCE · 04{% endblock %}
+{% block subtitle %}Streaming momentum, international chart footprint, and album staying power{% endblock %}
+{% block controls %}{% include 'partials/date_filters.html' %}{% endblock %}
+{% block content %}
+<section class="artist-intro" id="artist-empty-state" aria-labelledby="artist-empty-heading" hidden>
+ <p class="intro-index">ARTIST PROFILE / NO SELECTION</p>
+ <div class="intro-inner"><div><h2 id="artist-empty-heading">Begin with an artist.</h2>
+ <p>Search an artist to examine credited streams, chart presence across markets, and album performance. No artist is selected automatically.</p></div>
+ <button class="intro-action" id="choose-artist" type="button">Find an artist <span aria-hidden="true">↗</span></button></div>
+ <div class="intro-aside">The selected artist stays active while you browse this session. Clear the selection to return to this view.</div>
+</section>
+<p id="selected-artist-name" class="artist-context" hidden></p>
+<div class="dashboard-grid" id="dashboard-visuals">
+ <section class="card span-4"><div class="chart-head"><div><h2>Artist Geographic Footprint</h2><p>Countries containing credited chart tracks, sized by allocated streams</p></div><span class="chart-tag">MAP</span></div><div id="artist-map" class="plot-map"></div></section>
+ {% include 'partials/chart.html' with chart_id='main-chart' heading='Artist Daily Stream Trend' description='Equal attribution for songs with multiple credited artists' badge='DAILY STREAMS' extra_class='span-4' %}
+ {% include 'partials/chart.html' with chart_id='secondary-chart' heading='Album Longevity Comparison' description='Albums by maximum weeks-on-chart; requires album-artist attribution bridge' badge='ALBUMS' extra_class='span-4' %}
+</div>
+{% include 'partials/detail_table.html' with heading='Detailed Artist Discography' description='Credited streams and chart performance of the selected artist' %}
+{% endblock %}

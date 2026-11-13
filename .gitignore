@@ -1,0 +1,75 @@
+# 1. Environment variables and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# 2. Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# 3. Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 4. Jupyter Notebook temporary files
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# 5. Large raw datasets
+/data/raw/*
+!/data/raw/README.md
+
+# 6. Local database files and backups
+*.sqlite3
+*.db
+*.bak
+*.sql.gz
+*.sql.zip
+*.dump
+*.sql.bak
+
+# 7. Django generated files
+staticfiles/
+media/
+*.log
+
+# 8. IDE settings
+.vscode/
+.idea/
+
+# 9. Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 10. Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+~$*
+
+# 11. Python build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# 12. Test and coverage reports
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# 13. Local exports
+/exports/
+/backups/
+/dumps/

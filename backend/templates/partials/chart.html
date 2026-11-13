@@ -1,0 +1,5 @@
+<section class="card chart-card {{ extra_class|default:'' }}">
+ <div class="chart-head"><div><h2>{{ heading }}</h2><p>{{ description }}</p></div><span class="chart-tag">{{ badge|default:'ANALYTICS' }}</span></div>
+ <div class="chart-wrap"><canvas id="{{ chart_id }}" role="img" aria-label="{{ heading }}"></canvas></div>
+ <p class="empty-message" data-empty-for="{{ chart_id }}" hidden>No chart records for the current selection.</p>
+</section>
