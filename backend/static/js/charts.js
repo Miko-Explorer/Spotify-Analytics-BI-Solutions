@@ -41,10 +41,19 @@
        y:{title:{display:true,text:'Peak rank (lower is better)',color:C.ink},reverse:true,ticks:{color:C.ink}}}});
  }
  function histogram(id,items){const a=items||[];bars(id,a,'bucket','count','Tracks');}
+ function barsInPlot(id,items,labelKey,valueKey,label){
+   const host=document.getElementById(id);if(!host)return;
+   if(host.classList.contains('js-plotly-plot')&&window.Plotly)Plotly.purge(host);
+   host.replaceChildren();
+   const canvas=document.createElement('canvas');canvas.id=id+'-fallback';
+   canvas.setAttribute('aria-label',label);host.append(canvas);
+   bars(canvas.id,items,labelKey,valueKey,label,true);
+ }
  function emptyPlot(id,message){const el=document.getElementById(id);if(el)el.textContent=message;}
  function plot(id,traces,layout={}){const el=document.getElementById(id);if(!el)return;
   if(!window.Plotly){emptyPlot(id,'Map and box plot library unavailable. Check your internet connection.');return;}
   if(!traces.length){emptyPlot(id,'No supported observations for this selection.');return;}
+  if(el.querySelector('canvas')){const old=Chart.getChart(el.querySelector('canvas'));if(old)old.destroy();el.replaceChildren();}
   Plotly.react(el,traces,{paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{color:C.ink,size:11},margin:{t:12,b:35,l:40,r:8},...layout},
       {responsive:true,displayModeBar:false});
  }
@@ -92,7 +101,7 @@
    const empty=document.querySelector(`[data-empty-for="${id}"]`);if(empty){empty.hidden=false;empty.textContent='No chart records for the current selection.';}
   }
  }
- window.SpotifyCharts={line,bars,doughnut,scatter,histogram,map,boxplot,calendar,clearAll};
+ window.SpotifyCharts={line,bars,barsInPlot,doughnut,scatter,histogram,map,boxplot,calendar,clearAll};
 })();
 /* Stacked label share chart: one country total subdivided by record label. */
 (() => {

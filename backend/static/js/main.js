@@ -9,6 +9,7 @@
  const hasMappedMeasure=(rows,field)=>hasRows(rows)&&rows.some(r=>
     r.iso3 && r[field]!==null && r[field]!==undefined && Number.isFinite(Number(r[field])));
  const chartPanel=id=>$(id)?.closest('.card');
+ const panelTitle=(id,title,description)=>{const panel=chartPanel(id);if(!panel)return;const h=panel.querySelector('.chart-head h2'),p=panel.querySelector('.chart-head p');if(h)h.textContent=title;if(p)p.textContent=description;};
  const showPanel=(id,hasData)=>{const panel=chartPanel(id);if(panel)panel.hidden=!hasData;};
 
  let controller=null,version=0;
@@ -127,34 +128,56 @@
     else{charts().bars('main-chart',d.top,'name','streams','Total streams',true);
       charts().line('secondary-chart',d.history,[{key:'streams',label:'Daily streams'}]);}
     charts().calendar('calendar-heatmap',isAlbum?[]:d.history);
-    charts().doughnut('third-chart',d.status);
+    if(hasMeasure(d.status,'value')){
+     panelTitle('third-chart','New vs Returning Top 10','Entry-status distribution on the latest observed chart date');
+     charts().doughnut('third-chart',d.status);
+    }else{
+     panelTitle('third-chart','Daily New Entries','Observed new chart entries across the filtered period');
+     charts().line('third-chart',d.history,[{key:'new_entries',label:'New entries'}]);
+    }
     showPanel('main-chart',hasMeasure(d.top,isAlbum?'best_rank':'streams'));
     showPanel('secondary-chart',hasMeasure(d.history,isAlbum?'albums':'streams'));
     showPanel('calendar-heatmap',!isAlbum&&hasMeasure(d.history,'streams'));
-    showPanel('third-chart',hasMeasure(d.status,'value'));
+    showPanel('third-chart',hasMeasure(d.status,'value')||hasMeasure(d.history,'new_entries'));
     table('main-table',d.top,isAlbum?[['name','Album'],['best_rank','Best Rank','integer'],['weeks','Weeks','integer']]:
      [['name','Track'],['streams','Total Streams','compact'],['best_rank','Best Rank','integer']]);
   }else if(page==='regional'){
     charts().bars('main-chart',d.top_artists,'name','avg_rank','Average rank',true);
     charts().stacked('secondary-chart',d.labels);
-    charts().line('third-chart',d.compare,[{key:'local_streams',label:'Country #1 streams'},
+    if(hasMeasure(d.compare,'local_streams','global_streams')){
+     panelTitle('third-chart','Local #1 vs Same Track on Global Chart','Country top-ranked track compared with its global streams');
+     charts().line('third-chart',d.compare,[{key:'local_streams',label:'Country #1 streams'},
       {key:'global_streams',label:'Same track GLOBAL streams'}]);
-    charts().map('regional-map',d.shares,d.artist_mode?'artist_streams':'share_pct',d.country);
+    }else{
+     panelTitle('third-chart',d.artist_mode?'Selected Artist Daily Streams':'Selected Country vs Global Streams',
+       'Available filtered daily stream observations; no matching #1 track comparison');
+     charts().line('third-chart',d.history,d.artist_mode?[{key:'streams',label:'Artist credited streams'}]:
+      [{key:'streams',label:'Country chart streams'},{key:'global_streams',label:'Global chart streams'}]);
+    }
+    panelTitle('fourth-chart',d.artist_mode?'Artist Share of Local Market Over Time':'Country Share of Global Charts Over Time',
+      d.artist_mode?'Selected artist credited streams as a percentage of country chart streams':'Selected country chart streams as a percentage of global chart streams');
+    charts().line('fourth-chart',d.history,[{key:'share',label:d.artist_mode?'Artist share (%)':'Country share (%)'}]);
     showPanel('main-chart',hasMeasure(d.top_artists,'avg_rank'));
     showPanel('secondary-chart',hasMeasure(d.labels,'streams'));
-    showPanel('third-chart',hasMeasure(d.compare,'local_streams','global_streams'));
-    showPanel('regional-map',hasMappedMeasure(d.shares,d.artist_mode?'artist_streams':'share_pct'));
+    showPanel('third-chart',hasMeasure(d.compare,'local_streams','global_streams')||hasMeasure(d.history,'streams'));
+    showPanel('fourth-chart',hasMeasure(d.history,'share'));
     table('main-table',d.top_artists,[['name','Artist'],['avg_rank','Average Rank','decimal'],['chart_days','Observations','integer']]);
     table('secondary-table',d.labels,[['label_name','Label'],['streams','Streams','compact']]);
   }else if(page==='velocity'){
     charts().scatter('main-chart',d.scatter);
-    charts().boxplot('label-box',d.box);
+    if(hasMeasure(d.box,'days')){
+     panelTitle('label-box','Chart Longevity by Record Label','Distribution of observed chart days by label');
+     charts().boxplot('label-box',d.box);
+    }else{
+     panelTitle('label-box','Longest-Charting Tracks','Observed chart longevity for the selected market and period');
+     charts().barsInPlot('label-box',d.tracks.slice(0,12),'name','days','Days on chart');
+    }
     charts().histogram('third-chart',d.histogram);
     charts().line('fourth-chart',d.rank||[],[{key:'chart_rank',label:'Current rank'},
       {key:'previous_rank',label:'Previous rank'}],true);
     updateTracks(d.tracks,d.selected_track);
     showPanel('main-chart',hasMeasure(d.scatter,'entry_rank','peak_rank'));
-    showPanel('label-box',hasMeasure(d.box,'days'));
+    showPanel('label-box',hasMeasure(d.box,'days')||hasMeasure(d.tracks,'days'));
     showPanel('third-chart',hasMeasure(d.histogram,'count'));
     showPanel('fourth-chart',hasMeasure(d.rank,'chart_rank'));
     table('main-table',d.tracks,[['name','Track / Album'],['entry_rank','Entry Rank','integer'],
@@ -163,10 +186,16 @@
     content($('selected-artist-name'),d.artist?`${d.artist.artist_name||'Unknown artist'}`:'No artist found');
     charts().map('artist-map',d.reach,'streams');
     charts().line('main-chart',d.daily,[{key:'streams',label:'Credited daily streams'}]);
-    charts().bars('secondary-chart',d.albums,'name','weeks','Weeks on chart',true);
+    if(hasMeasure(d.albums,'weeks')){
+     panelTitle('secondary-chart','Album Chart Longevity','Recorded weeks on chart for attributed albums');
+     charts().bars('secondary-chart',d.albums,'name','weeks','Weeks on chart',true);
+    }else{
+     panelTitle('secondary-chart','Leading Artist Chart Markets','Countries ranked by credited streams in the selected period');
+     charts().bars('secondary-chart',d.reach.slice(0,12),'code','streams','Credited streams',true);
+    }
     showPanel('artist-map',hasMappedMeasure(d.reach,'streams'));
     showPanel('main-chart',hasMeasure(d.daily,'streams'));
-    showPanel('secondary-chart',hasMeasure(d.albums,'weeks'));
+    showPanel('secondary-chart',hasMeasure(d.albums,'weeks')||hasMeasure(d.reach,'streams'));
     table('main-table',d.reach,[['code','Country'],['chart_days','Chart Days','integer'],['streams','Credited Streams','compact']]);
   }
   if(d.period?.to)content($('period-note'),`${String(d.period.from).slice(0,10)} to ${String(d.period.to).slice(0,10)}`);

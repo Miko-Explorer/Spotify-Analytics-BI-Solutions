@@ -11,7 +11,7 @@ Spotify Analytics is a local, web-based Business Intelligence (BI) application t
 
 Instead of relying on individual chart snapshots, users explore changes in streaming volume, regional market differences, chart momentum and longevity, and artist performance. The interface uses a dark, glassmorphism-inspired design with context-aware KPI cards, filtered charts, searchable detail tables, and individual visualization zoom controls.
 
-**Current implementation:** a locally operated historical analytics dashboard. The application is **not** connected to a live Spotify streaming API, and its historical coverage ends with the datasets loaded into MySQL. Dashboard figures should be considered validated only after comparison with the corresponding warehouse SQL results.
+**Current implementation:** a locally operated historical analytics dashboard (V7 filter-compatible analytics). The application is **not** connected to a live Spotify streaming API, and its historical coverage ends with the datasets loaded into MySQL. Dashboard figures should be considered validated only after comparison with the corresponding warehouse SQL results.
 
 ### Intended users
 
@@ -46,7 +46,7 @@ This README describes the project structure and implementation goals. Some featu
 
 ## 3. Data sources and coverage
 
-The project's source dataset is the Kaggle collection **Spotify Charts Daily Updated**, attributed in the proposal to Gonzalo López Gil. Four working files are stored under `data/raw/`:
+The project's source dataset is the Kaggle collection **Spotify Charts Daily Updated**, attributed in the proposal to Gonzalo López Gil. The extraction notebook creates a one-year subset of the chart data, which is then transferred or downloaded to the local `data/raw/` directory. Four working files are expected locally; the large CSVs are excluded from GitHub:
 
 | File | Purpose | Granularity |
 | --- | --- | --- |
@@ -117,9 +117,11 @@ Spotify Analytics/
 │   └── tests/                   # Additional backend tests
 │
 ├── data/
-│   └── raw/                     # Four original input CSVs
+│   └── raw/                     # README tracked in Git; extracted CSVs remain local
 │
 ├── etl/
+│   ├── extraction/              # Recommended home for Kaggle extraction notebook
+│   │   └── spotify_kaggle_automatic_transfer.ipynb  # If committed under this name
 │   ├── eda/                     # Four exploratory notebooks
 │   ├── cleaning/                # Four cleaning notebooks
 │   ├── sql/
@@ -169,7 +171,7 @@ The root `requirements.txt` installs a combined working environment. The existin
 1. Install **Python 3.13** and ensure `py -3.13` works in PowerShell.
 2. Install **MySQL Server 8.0+** and **MySQL Workbench**.
 3. Install **VS Code** with the Python and Jupyter extensions.
-4. Obtain the four CSV inputs and place them in `data/raw/`.
+4. Run or obtain the Kaggle one-year extracts, then download or transfer the four CSV inputs into `data/raw/`. See Section 8 for the complete sequence.
 5. Ensure the MySQL service is running.
 
 ### Option A: Existing backend environment (recommended for the website)
@@ -256,13 +258,47 @@ Copy the generated key into the root `.env` file. Never commit `.env`, hard-code
 
 `backend/config/settings.py` uses `django.db.backends.mysql` with a PyMySQL compatibility adapter (`pymysql.install_as_MySQLdb()`). This avoids the `mysqlclient` native DLL problem encountered on some managed Windows installations. It loads `DW_DB_*` variables first, with selected `DB_*` fallbacks for credentials/host/port. Verify the final database is `spotify_analytics_dw`, not the staging database.
 
-## 8. Data engineering workflow
+## 8. Data acquisition and ETL workflow
 
-### Step 1. Exploratory data analysis
+The complete process is **Kaggle source datasets → one-year extraction → download or transfer CSVs to the local computer → EDA → Python cleaning → MySQL staging → SQL warehouse transformation → aggregation tables → Django dashboards**.
 
-Open the four notebooks under `etl/eda/`. They examine dataset structure, null patterns, duplicates, distributions, chart rankings, streams, and temporal behavior. Their core Python libraries are pandas, NumPy, Matplotlib, and Seaborn.
+The work is a hybrid **ETL + SQL transformation** process. Python prepares source records and loads staging tables; MySQL transforms staging data into the dimensional warehouse and precomputed analytics tables. EDA is a supporting exploration/quality-assessment step, not a separate letter in ETL. The Django website is the presentation layer, not a data extraction or cleaning tool.
 
-### Step 2. Data cleaning
+### Step 1. Extract a one-year subset in Kaggle
+
+The upstream Kaggle collection includes daily songs, daily artists, weekly albums, and artist reference data. The extraction notebooks select the target reporting window instead of sending the complete upstream chart history to the local project. The intended outputs are:
+
+- `charts_songs_daily_365D.csv`
+- `charts_artists_daily_365D.csv`
+- `charts_albums_weekly_52W.csv`
+- `artists.csv` (artist reference/master data)
+
+The source notebooks available during development include `spotify_capstone_kaggle_extractor.ipynb` and `spotify_kaggle_automatic_transfer.ipynb`. Keep the final approved extraction notebook under `etl/extraction/` in Git for reproducibility, once the team confirms which notebook represents the final extraction method. Remove credentials, tokens, and unnecessary outputs before committing it. Different notebooks may use different latest-date or calendar-window logic; record the actual extraction cutoff and resulting date bounds after each run.
+
+**Extraction and downloading are distinct:** extraction filters and exports the source records in the Kaggle notebook environment. Download or transfer then moves the resulting CSV files onto your Windows computer.
+
+### Step 2. Download or transfer the extracted CSVs locally
+
+Choose the method used in the final reproducible pipeline:
+
+**Manual method:** download each exported CSV from Kaggle, then place all four files in `Spotify Analytics/data/raw/` with the exact expected filenames.
+
+**Optional automated method:** the `spotify_kaggle_automatic_transfer.ipynb` notebook contains cells designed to copy the outputs through a Google Drive remote (`rclone` remote `gdrive`, folder `spotify_analytics_transfer/raw`). A separate configured Windows synchronization task must then copy them into the project's local `data/raw/` directory. This method requires private Kaggle secrets and independently configured synchronization; it is **not** part of Django runtime and is not assumed to be active on other computers.
+
+Confirm all four files exist, are nonempty, and have expected headers before continuing. The raw CSVs are deliberately excluded from GitHub. See `data/raw/README.md` for acquisition details and the exact `.gitignore` policy.
+
+### Step 3. Perform exploratory data analysis (EDA)
+
+Use the four notebooks under `etl/eda/` to inspect the **downloaded, uncleaned** CSV inputs. Analyze:
+
+- dataset dimensions, column names, types, and date or week coverage;
+- null and invalid-value distributions;
+- duplicate observations at the expected chart grain;
+- stream and rank distributions, chart entries, artist identifiers, and potential anomalies.
+
+EDA establishes the data-quality issues and transformation choices. The notebook logic is reusable on refreshed extracts, although its numerical results and plots must be recalculated.
+
+### Step 4. Transform and clean the datasets in Python
 
 Run the corresponding notebooks under `etl/cleaning/`:
 
@@ -271,37 +307,54 @@ Run the corresponding notebooks under `etl/cleaning/`:
 - `clean_albums_weekly_52W.ipynb`
 - `clean_artists.ipynb`
 
-The cleaning workflow standardizes source fields, retains essential chart identifiers and dates, handles missing optional measurements without inventing zero streams, and removes duplicates at the intended observation grain. Verify notebook paths and outputs before execution; do not assume all notebook cells can be executed in arbitrary order.
+The cleaning workflow prepares compatible source fields and dates, handles invalid or missing values according to the implemented rules, and checks duplicates at the intended observation grain. Avoid silently converting missing stream values into valid zero streams. Verify notebook file paths and outputs before running; notebook cells may depend on execution order.
 
-### Step 3. Stage cleaned records
+### Step 5. Load cleaned data into MySQL staging
 
-The staging database is `spotify_analytics_stg`, with four cleaned source tables. The shared loader is `etl/load.py` and is intended to transfer cleaned DataFrames to MySQL.
+The staging schema is `spotify_analytics_stg`. It holds four cleaned source tables corresponding to the four datasets. The repository includes `etl/load.py` as a shared DataFrame-to-staging loader; confirm the actual invocation and connection variables from that script before using it.
 
-**Safety:** `etl/sql/spotify_analytics_stg_ddl.sql` contains `DROP DATABASE IF EXISTS spotify_analytics_stg`. Do **not** rerun it against the populated database for ordinary website testing. The staging load script is also not necessary when the data is already present.
+**Safety:** `etl/sql/spotify_analytics_stg_ddl.sql` contains `DROP DATABASE IF EXISTS spotify_analytics_stg`. This is for destructive setup, **not** a routine refresh. Do not rerun the schema DDL when the database already contains the cleaned observations you want to preserve.
 
-### Step 4. Load and maintain the warehouse
+### Step 6. Transform staging data into the dimensional warehouse
 
-The database `spotify_analytics_dw` uses dimensional and fact tables together with materialized analytical aggregations.
+SQL scripts populate `spotify_analytics_dw` with the following structures:
 
-- Eight dimensions: `dim_date`, `dim_geography`, `dim_artists`, `dim_track`, `dim_album`, `dim_label`, `dim_chart_type`, `dim_entry_status`.
-- Main track-artist bridge: `bridge_track_artist`.
-- Three performance facts: `fact_song_performance`, `fact_artists_performance`, `fact_album_performance`.
-- KPI configuration fact: `fact_kpi_thresholds`.
-- Nine aggregation tables: `agg_daily_global_summary`, `agg_country_share`, `agg_artist_momentum`, `agg_label_market_share`, `agg_track_velocity`, `agg_longevity_benchmarks`, `agg_new_entry_baseline`, `agg_regional_diversity`, `agg_artist_reach`.
+- **Eight dimensions:** `dim_date`, `dim_geography`, `dim_artists`, `dim_track`, `dim_album`, `dim_label`, `dim_chart_type`, and `dim_entry_status`.
+- **Main attribution bridge:** `bridge_track_artist`.
+- **Three performance facts:** `fact_song_performance`, `fact_artists_performance`, and `fact_album_performance`.
+- **KPI threshold/configuration fact:** `fact_kpi_thresholds`.
 
-The optional `bridge_album_artist` relationship is a separate extension for artist-specific album comparison.
+Dimension tables are populated before their dependent bridges and facts. This is SQL-based warehouse transformation, not the original Kaggle extraction stage.
 
-**Safety:** `etl/sql/spotify_analytics_dw_ddl.sql` contains `DROP DATABASE IF EXISTS spotify_analytics_dw`. It is a destructive setup script, not a routine maintenance command. The website reads the existing populated warehouse and does not require running this DDL or reloading 10+ million fact records.
+**Safety:** `etl/sql/spotify_analytics_dw_ddl.sql` contains `DROP DATABASE IF EXISTS spotify_analytics_dw`. Do not use the DDL to refresh a populated warehouse without backups and a reviewed rebuild plan.
+
+### Step 7. Build the dashboard aggregation tables
+
+The nine aggregation tables are `agg_daily_global_summary`, `agg_country_share`, `agg_artist_momentum`, `agg_label_market_share`, `agg_track_velocity`, `agg_longevity_benchmarks`, `agg_new_entry_baseline`, `agg_regional_diversity`, and `agg_artist_reach`.
+
+Aggregations prepare summarized observations and derived metrics for faster dashboard queries. The optional `bridge_album_artist` extension supports album-to-artist comparisons where validated attribution exists.
+
+### Step 8. Present the data using Django
+
+The Django backend queries `spotify_analytics_dw` and returns analytics results through JSON endpoints. Chart.js and Django templates display the four interactive dashboard pages. The website reads the existing warehouse and does **not** require extraction, cleaning, or warehouse DDL every time `python manage.py runserver` is executed.
+
+### Updating source data later
+
+The Kaggle source refreshes periodically, but the local dashboard does **not** update automatically merely because upstream CSVs have changed. An update requires a new extraction, local transfer, quality checks, cleaning, safe staging and warehouse updates, aggregation refresh, and KPI reconciliation.
+
+- Keep the current validated one-year extract fixed for reproducible capstone results unless the team deliberately approves a refresh.
+- Reuse the EDA and cleaning notebooks if the incoming schema and expected grain are unchanged; rerun the analysis and data-quality checks.
+- Check dates or filenames hardcoded into notebooks and SQL scripts before refreshing.
+- Do not assume the existing staging and DW SQL scripts perform safe incremental or idempotent loads. Examine `DROP`, `TRUNCATE`, `INSERT`, duplicate constraints, and table dependencies first.
+- Log the extract cutoff, observed date coverage, record counts, cleaning changes, and warehouse reconciliation for each refresh.
 
 ### Optional SQL extensions
 
 | File | Role | When to execute |
 | --- | --- | --- |
-| `etl/sql/album_artist_bridge.sql` | Associate albums with credited artists | After backing up and validating source artist identifiers; needed for artist-specific album comparison |
-| `etl/sql/dashboard_indexes.sql` | Add selected indexes on large fact tables | Only after reviewing existing indexes and confirming a query-performance need |
-| `etl/sql/view_all_spotify_dw_tables.sql` | Inspect warehouse tables | Read-only inspection; review script contents before running |
-
-Use MySQL Workbench → **File → Open SQL Script**, review the SQL, execute, and validate the results. Do not execute every SQL file in the folder indiscriminately.
+| `etl/sql/album_artist_bridge.sql` | Associate albums with credited artists | After validating source artist identifiers; supports artist-specific album comparisons |
+| `etl/sql/dashboard_indexes.sql` | Add selected indexes on large fact tables | Only after reviewing existing indexes and a query-performance need |
+| `etl/sql/view_all_spotify_dw_tables.sql` | Inspect warehouse tables | Read-only inspection; still review script contents |
 
 ## 9. Analytics dashboards
 
@@ -320,7 +373,7 @@ Purpose: regional comparison, label concentration, and local chart strength.
 
 - Original KPIs: Leading Artist Volume; Unique Artist Count (Top 50); Change in Country Share.
 - Supplementary KPI: Leading Record Label Market Share.
-- Main visuals: strongest artists, label distribution, local/global track comparison, geographic view.
+- Main visuals: strongest artists, label distribution, local/global track comparison, **market-share trend over time** (V7 replaces the earlier country-share geographic map).
 - Detail table: label and market-share information, with relevant filter context.
 
 ### Hit Velocity & Longevity
@@ -347,6 +400,12 @@ Purpose: one explicitly selected artist's listener peak, chart reach, credited-t
 ## 10. Interface and filter behavior
 
 The current frontend design uses a black background with restrained glass panels and subtle green accents. Status-based KPI styling differentiates rising, falling, and stable performance. Individual KPI icons explain metric types. Charts have zoom controls and a reset function. Detail tables support bounded searches, sorting, pagination, and CSV export of the visible page.
+
+### V7 filter-compatible KPIs and visualizations
+
+V7 preserves original KPIs and visualizations where the selected artist, market, period, and chart scope provide valid measurements. If a formula lacks the needed previous period, rank history, entry status, or attribution relationship, the interface may show a **clearly labeled alternative statistic or chart** derived from the same filtered observations. If no relevant records exist, the interface presents an empty state rather than inventing measurements.
+
+Examples include observed new entries or chart days in Global Pulse, observed artist chart days in Regional Rhythms, ranked-track counts or longevity bars in Hit Velocity, and artist chart-day or country-stream alternatives in Artist Deep-Dive. For Regional Rhythms, V7 replaces the static country-share map with a time-series share visualization. In artist mode, the panel uses artist share of the selected local chart market. These ratios describe **observed chart streams**, not the complete national streaming market.
 
 ### Capability-aware filters
 
@@ -486,6 +545,33 @@ The original *Web-Based Spotify Analytics Dashboard* proposal documents four bus
 **Course:** DSA 4157 – Business Intelligence.  
 **Academic term:** 1st Term, AY 2026–2027.
 
-## 17. Licensing and attribution
+## 17. GitHub and source-data policy
+
+Repository: [Spotify-Analytics-BI-Solutions](https://github.com/Miko-Explorer/Spotify-Analytics-BI-Solutions).
+
+Git tracks the Django source, ETL and SQL scripts, documentation, tests, and the approved extraction notebook. The large CSVs in `data/raw/`, virtual environments, generated caches, `.env`, and local database backups stay outside normal Git tracking. The root `.gitignore` should include:
+
+```gitignore
+.env
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+/data/raw/*
+!/data/raw/README.md
+```
+
+To publish normal changes after testing:
+
+```powershell
+git status
+git add README.md backend etl data/raw/README.md
+git commit -m "Document Spotify extraction and ETL workflow"
+git pull --rebase origin main
+git push origin main
+```
+
+Do not force-push routine content updates. Coordinate merges with teammates.
+
+## 18. Licensing and attribution
 
 Source data is attributed to the Kaggle dataset **Spotify Charts Daily Updated** by Gonzalo López Gil, as identified in the project's proposal. Review its current licensing and permitted redistribution before publishing raw CSVs. Spotify and other third-party names or marks belong to their respective owners. A software license for the project itself has not been specified in the supplied materials; add a `LICENSE` file only after the team chooses one.

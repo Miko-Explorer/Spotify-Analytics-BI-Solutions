@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
 {% block eyebrow %}REGIONAL ANALYSIS · 02{% endblock %}
-{% block subtitle %}Local chart leaders, label influence, and global comparisons{% endblock %}
+{% block subtitle %}Local chart leaders, label influence, and market share over time{% endblock %}
 {% block controls %}{% include 'partials/date_filters.html' %}{% endblock %}
 {% block content %}
 <div class="dashboard-grid">
  {% include 'partials/chart.html' with chart_id='main-chart' heading='Top 5 Artists by Best Average Chart Position' description='Smaller average rank indicates stronger chart placement' badge='LOCAL ARTISTS' extra_class='span-6' %}
  {% include 'partials/chart.html' with chart_id='secondary-chart' heading='Record Label Stream Distribution' description='Streaming volume by record label within the selected country' badge='LABEL MIX' extra_class='span-6' %}
  {% include 'partials/chart.html' with chart_id='third-chart' heading='Local #1 vs Same Track on Global Chart' description='Compares the country #1 track and its GLOBAL chart streams, for each observed date' badge='COMPARISON' extra_class='span-6' %}
- <section class="card span-6"><div class="chart-head"><div><h2>Country Share Map</h2><p>Country chart streams as a percentage of source GLOBAL</p></div><span class="chart-tag">MAP</span></div><div id="regional-map" class="plot-map"></div></section>
+ {% include 'partials/chart.html' with chart_id='fourth-chart' heading='Market Share Across Observed Dates' description='Selected market share of GLOBAL chart streams, or selected artist share of local market streams' badge='SHARE TREND' extra_class='span-6' %}
 </div>
 {% include 'partials/detail_table.html' with heading='Detailed Regional Label Performance' description='Record-label stream volumes and country market shares' %}
 {% endblock %}

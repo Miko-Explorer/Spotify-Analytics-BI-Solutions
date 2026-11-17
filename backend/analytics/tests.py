@@ -77,8 +77,9 @@ class CapabilityFilterTests(SimpleTestCase):
         self.assertEqual(self.client.get('/api/filter-options/unknown/').status_code, 404)
         self.assertEqual(self.client.get('/api/filter-options/artist/?artist_id=bad').status_code, 400)
 
+    @patch('analytics.queries.one', return_value={})
     @patch('analytics.queries.rows', return_value=[{'code':'PH','name':'Philippines'}])
-    def test_yearly_scope_not_on_velocity(self, mock_rows):
+    def test_yearly_scope_not_on_velocity(self, mock_rows, mock_one):
         from .queries import filter_availability
         response = filter_availability('velocity')
         self.assertEqual([s['value'] for s in response['scopes']], ['daily'])
@@ -114,3 +115,21 @@ class V6AssetContractTests(SimpleTestCase):
         self.assertIn('visual-zoom.js', (base / 'templates' / 'base.html').read_text(encoding='utf-8'))
         self.assertIn('metricIcon', (base / 'static' / 'js' / 'main.js').read_text(encoding='utf-8'))
         self.assertIn('Zoom', (base / 'static' / 'js' / 'visual-zoom.js').read_text(encoding='utf-8'))
+
+
+class V7RegionalContractTests(SimpleTestCase):
+    def test_regional_market_share_is_a_time_series(self):
+        from pathlib import Path
+        base=Path(__file__).resolve().parent.parent
+        template=(base/'templates/analytics/regional_rhythms.html').read_text(encoding='utf-8')
+        javascript=(base/'static/js/main.js').read_text(encoding='utf-8')
+        self.assertIn("chart_id='fourth-chart'",template)
+        self.assertIn("charts().line('fourth-chart',d.history",javascript)
+        self.assertNotIn('Country Share Map',template)
+
+    def test_replacements_come_from_filtered_observations(self):
+        from pathlib import Path
+        code=(Path(__file__).resolve().parent/'queries.py').read_text(encoding='utf-8')
+        self.assertIn('Observed Artist Chart Days',code)
+        self.assertIn('New Entry Observations',code)
+        self.assertIn('Ranked Tracks in Comparison',code)

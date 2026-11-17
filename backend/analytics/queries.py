@@ -191,8 +191,14 @@ def global_pulse(country='GLOBAL', start=None, end=None, artist_id=None, scope='
         scope=scope,period={'from':history[0]['day'] if history else None,'to':latest.get('day')},
         metrics=[metric('Total Streams vs. Previous Period',total,'compact',movement(growth),f'Previous period: {prior:,}' if prior is not None else 'Previous equivalent period unavailable'),
             metric('Top 10 Chart Strength',peak,'decimal',peak_class,'Latest date: average peak rank for chart Top 10'),
-            metric('New Entries vs. Historical Baseline',entry_ratio,'percent',entry_class,'30-observed-day baseline summed across selected days' if entry_ratio is not None else 'No comparable full baseline for this selection'),
-            metric('Stream Momentum',growth,'percent',movement(growth),'Change versus preceding equivalent period')],
+            metric('New Entries vs. Historical Baseline' if entry_ratio is not None else 'New Entry Observations',
+                   entry_ratio if entry_ratio is not None else (new if history else None),
+                   'percent' if entry_ratio is not None else 'integer',entry_class,
+                   'Historical baseline ratio' if entry_ratio is not None else 'Sum of daily NEW chart entries in selected market and dates'),
+            metric('Stream Momentum' if growth is not None else 'Observed Chart Days',
+                   growth if growth is not None else (len(history) if history else None),
+                   'percent' if growth is not None else 'integer',movement(growth) if growth is not None else None,
+                   'Change versus preceding equivalent period' if growth is not None else 'Days with chart-stream observations; no comparable preceding period')],
         new_entry_count=new)
 
 
@@ -306,7 +312,10 @@ def regional(country='PH',start=None,end=None,artist_id=None):
     return dict(country=country,artist_mode=bool(artist_id),history=history,top_artists=top_artists,labels=labels,compare=compare,shares=map_countries(shares, 'country_code'),
         local_hero=local_hero,period={'from':history[0]['day'] if history else None,'to':latest.get('day')},
         metrics=[metric('Leading Artist Volume',local_hero.get('streams'),'compact',hero_class,local_hero.get('name','No chart artist')),
-            metric('Unique Artist Count (Top 50)',diversity.get('artists'),'integer',diversity.get('category'), 'Not meaningful for one artist' if artist_id else None),
+            metric('Observed Artist Chart Days' if artist_id else 'Unique Artist Count (Top 50)',
+                   len(history) if artist_id and history else diversity.get('artists'),
+                   'integer',None if artist_id else diversity.get('category'),
+                   'Days with credited streams in the selected market' if artist_id else 'Latest available Top 50 artist diversity'),
             metric('Change in Country Share (%)',change,'percent',movement(change),f'Latest artist share: {reach}%' if artist_id else f'Latest market share: {reach}%'),
             metric('Top Record Label Market Share',
                 (100 * float(labels[0]['streams']) / sum(float(x.get('streams') or 0) for x in history) if labels and sum(float(x.get('streams') or 0) for x in history)>0 else None) if artist_id else
@@ -423,9 +432,11 @@ def velocity(country='GLOBAL',start=None,end=None,artist_id=None,track_id=None,s
         histogram=histogram,box=box,rank=rank,selected_track=track_id,
         metrics=[metric('Avg. Chart Position Improvement',summary.get('avg_improvement'),'decimal',speed_class,'Entry rank minus best peak rank; selected market percentile'),
             metric('Max Track Longevity (Days)',summary.get('max_days'),'integer',longevity_class,'Maximum chart days among eligible tracks'),
-            metric('Daily Rank Change',latest_rank.get('rank_change'),'integer',
-                  'Rising' if (latest_rank.get('rank_change') or 0)>0 else 'Falling' if (latest_rank.get('rank_change') or 0)<0 else 'Stable' if latest_rank.get('rank_change') is not None else None,
-                  'Selected track, most recent observed day'),
+            metric('Daily Rank Change' if latest_rank.get('rank_change') is not None else 'Ranked Tracks in Comparison',
+                  latest_rank.get('rank_change') if latest_rank.get('rank_change') is not None else (len(velocity_rows) if velocity_rows else None),
+                  'integer',
+                  ('Rising' if latest_rank.get('rank_change')>0 else 'Falling' if latest_rank.get('rank_change')<0 else 'Stable') if latest_rank.get('rank_change') is not None else None,
+                  'Most recent rank movement of selected track' if latest_rank.get('rank_change') is not None else 'Distinct tracks in the filtered comparison, capped at 100'),
             metric('Average Consecutive Chart Streak',avg_streak,'decimal',note='Average of each track’s maximum observed consecutive days')])
 
 
@@ -490,7 +501,10 @@ def artist_detail(artist_id=None,country='GLOBAL',start=None,end=None):
                           'compact',note='Available chart-day mean; insufficient comparable days for growth'))
     return dict(artist=artist,country=country,daily=daily,reach=map_countries(reach),albums=albums,
         momentum=list(reversed(momentum)),
-        metrics=[metric('Max Monthly Listeners',artist.get('monthly_listeners_peak'),'compact',note='Artist-master historical peak, not a monthly time series'),
+        metrics=[metric('Max Monthly Listeners' if artist.get('monthly_listeners_peak') is not None else 'Observed Artist Chart Days',
+                   artist.get('monthly_listeners_peak') if artist.get('monthly_listeners_peak') is not None else (len(daily) if daily else None),
+                   'compact' if artist.get('monthly_listeners_peak') is not None else 'integer',
+                   note='Artist-master historical peak, independent of country/date filters' if artist.get('monthly_listeners_peak') is not None else 'Days containing credited artist streams in selected market'),
             metric('Distinct Country Count',len(reach),'integer',note='Country charts containing credited tracks'),
             growth_metric,
             metric('Total Artist Streams',sum(float(r.get('streams') or 0) for r in daily),'compact',note='Equal credited share of track streams in selected chart market and dates')],
