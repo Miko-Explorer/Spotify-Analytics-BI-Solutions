@@ -1,6 +1,7 @@
 /* Dashboard controller: parameterized JSON APIs, persistent dedication and live chart rendering. */
 (() => {
  const $=id=>document.getElementById(id), page=document.body.dataset.page;
+ if(page==='guide') return;
  const filter=()=>window.SpotifyFilters;
  const charts=()=>window.SpotifyCharts;
  const hasRows=rows=>Array.isArray(rows)&&rows.length>0;
@@ -26,29 +27,44 @@
 
  // Status colors reflect documented thresholds, rather than treating every large total as good.
  const kpiTone=(item)=>{
+  // Prefer warehouse-defined thresholds. Other classifications are calculated
+  // by existing SQL-based KPI logic. Plain totals remain unclassified.
+  if(['positive','negative','neutral'].includes(item.tone))return item.tone;
   const status=String(item.status||'').trim().toLowerCase();
-  if(/^(rising|growing|increasing|strong|fast|high)$/.test(status))return 'positive';
-  if(/^(falling|declining|decreasing|weak|slow|low)$/.test(status))return 'negative';
-  if(/^(stable|moderate|normal|unchanged)$/.test(status))return 'neutral';
-  const label=String(item.label||'').toLowerCase(),number=Number(item.value);
-  if(Number.isFinite(number)&&/growth|momentum|percent change|change in country share|rank change|position improvement/.test(label))
-   return number>0?'positive':number<0?'negative':'neutral';
+  const label=String(item.label||'').toLowerCase();
+  if(!status)return 'default';
+  if(['rising','strong','fast'].includes(status))return 'positive';
+  if(['falling','weak','slow'].includes(status))return 'negative';
+  if(['stable','moderate','normal'].includes(status))return 'neutral';
+  if(status==='high')return /rank|position|longevity|improvement|new entr|reach|velocity|diversity/.test(label)?'positive':'default';
+  if(status==='low')return /rank|position|longevity|improvement|new entr|reach|velocity|diversity/.test(label)?'negative':'default';
   return 'default';
  };
+ // Distinct, accessible outline icons. Threshold color still comes from MySQL.
  const pictograms={
-  streams:'M4 17V9m5 8V5m5 12v-7m5 7V3',
-  rank:'M4 17h16M7 13l4-4 3 3 5-6',
+  streams:'M4 19V11m5 8V5m5 14v-7m5 7V3',
+  rank:'M4 18h16M7 14l4-4 3 3 5-6M16 7h3v3',
   entry:'M12 3v18m-7-7 7 7 7-7M5 6h14',
   growth:'M3 17l6-6 4 4 8-9M16 6h5v5',
   artist:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m14-17a4 4 0 1 1-8 0 4 4 0 0 1 8 0Zm2 8a4 4 0 0 1 4 4v3',
   globe:'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-10 10h20M12 2c-4 4-4 16 0 20M12 2c4 4 4 16 0 20',
   label:'M3 4h10l8 8-9 9-9-9V4Zm5 4h.01',
   days:'M7 3v4m10-4v4M3 10h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z',
+  album:'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0-7v3m0 14v3',
+  award:'M7 3h10v7a5 5 0 0 1-10 0V3ZM7 5H4v3a4 4 0 0 0 4 4m9-7h3v3a4 4 0 0 1-4 4m-4 3v4m-4 2h8',
   streak:'M12 22c5 0 8-4 8-9 0-4-3-7-4-9-1 4-3 5-4 7-1-3-3-5-4-6-1 5-4 8-4 12 0 3 4 5 8 5Z',
+  weeks:'M8 3v4m8-4v4M3 10h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm3 10h4m-4 3h7',
+  longevity:'M12 3a9 9 0 1 0 9 9M12 7v5l4 2M16 2h5v5',
+  numberOne:'M12 2l3 4 5 1-3 4 .6 5-5.6-2.4L6.4 16 7 11 4 7l5-1 3-4ZM8 20h8',
   fallback:'M4 19h16M6 15l5-5 4 3 4-6'
  };
  const iconName=(label)=>{
   const text=String(label||'').toLowerCase();
+  if(/reaching #1|number.one|number 1|#1/.test(text))return 'numberOne';
+  if(/best longevity|chart longevity|staying power/.test(text))return 'longevity';
+  if(/observed chart weeks|chart weeks|week/.test(text))return 'weeks';
+  if(/unique charting albums|charted albums|album/.test(text))return 'album';
+  if(/top 10|best chart|chart strength/.test(text))return 'award';
   if(/label/.test(text))return 'label';
   if(/listener|artist volume/.test(text))return 'artist';
   if(/country|market share|reach|diversity/.test(text))return 'globe';
@@ -78,7 +94,8 @@
    global:[['Observed Chart Dates',(d.history||[]).length]],
    regional:[['Charted Record Labels',(d.labels||[]).length]],
    velocity:[['Tracks in Comparison',(d.tracks||[]).length]],
-   artist:[['Observed Stream Dates',(d.daily||[]).length],['Charted Albums',(d.albums||[]).length]]
+   artist:[['Observed Stream Dates',(d.daily||[]).length],['Charted Albums',(d.albums||[]).length]],
+   weekly:[['Observed Chart Weeks',(d.history||[]).length]]
   };
   const cards=[...(items||[])];
   for(const [label,val] of replacements[page]||[]){
@@ -94,7 +111,7 @@
     const count=$('unavailable-count');if(count)count.textContent=`(${invalid.length})`;
     for(const item of invalid){const li=document.createElement('li');li.textContent=item.label+(item.note?`: ${item.note}`:' (no verified data)');list.append(li);}}
   for(const item of available){
-  const card=document.createElement('article');card.className='metric-card';card.dataset.tone=kpiTone(item);
+  const card=document.createElement('article');card.className='metric-card';card.dataset.tone=kpiTone(item);if(item.threshold_description)card.title=item.threshold_description;
   const heading=document.createElement('div');heading.className='metric-heading';
   const title=document.createElement('div');title.className='metric-label';content(title,item.label);
   const symbol=document.createElement('span');symbol.className='metric-icon';symbol.append(metricIcon(item.label));
@@ -111,10 +128,45 @@
     const td=document.createElement('td');td.textContent=value(item[key],type||'text');tr.append(td);}tbody.append(tr);}
   tab.append(thead,tbody);root.append(tab);
  }
- function warning(notes){const el=$('caveats');el.hidden=!(notes||[]).length;if(!el.hidden)el.textContent=notes.join(' ');}
+ function warning(notes){const el=$('caveats');if(!el)return;const cleaned=page==='weekly'?[]:(notes||[]).filter(x=>!/weekly albums? (is|are) unavailable/i.test(x));el.hidden=!cleaned.length;if(!el.hidden)el.textContent=cleaned.join(' ');}
  function updateTracks(arr,selected){const select=$('track');if(!select)return;const desired=selected?String(selected):select.value;
   select.replaceChildren();for(const item of arr||[]){if(item.track_id){select.add(new Option(item.name,String(item.track_id)));}}
   if([...select.options].some(o=>o.value===desired))select.value=desired;
+ }
+ function spotifyAlbumId(uri){
+  const candidate=String(uri||'').trim();
+  const match=candidate.match(/^(?:spotify:album:|https?:\/\/open\.spotify\.com\/album\/)?([A-Za-z0-9]{22})(?:[?#].*)?$/);
+  return match?match[1]:null;
+ }
+ function albumEmbed(id,title){
+  const iframe=document.createElement('iframe');
+  iframe.src=`https://open.spotify.com/embed/album/${encodeURIComponent(id)}?theme=0`;
+  iframe.title=`Spotify album artwork and preview: ${title}`;
+  iframe.loading='lazy';iframe.referrerPolicy='strict-origin-when-cross-origin';
+  iframe.allow='encrypted-media; fullscreen; picture-in-picture';
+  iframe.setAttribute('allowfullscreen','');
+  iframe.className='spotify-album-embed';iframe.setAttribute('scrolling','no');return iframe;
+ }
+ function renderAlbumArtwork(album){
+  const area=$('album-cover-art'),fallback=$('album-cover-initial');if(!area)return;
+  area.querySelector('iframe')?.remove();
+  const id=spotifyAlbumId(album.album_uri);
+  if(fallback)fallback.hidden=Boolean(id);
+  if(id)area.append(albumEmbed(id,album.name));
+ }
+ function renderAlbumGallery(leaders){
+  const section=$('album-gallery'),grid=$('album-gallery-grid');if(!section||!grid)return;
+  grid.replaceChildren();
+  for(const album of leaders){
+   const id=spotifyAlbumId(album.album_uri);if(!id)continue;
+   const tile=document.createElement('article');tile.className='album-gallery-item';
+   tile.append(albumEmbed(id,album.name));
+   const name=document.createElement('p');name.textContent=album.name;
+   const stat=document.createElement('small');stat.textContent=`Best rank #${album.best_rank} · ${album.weeks} weeks on chart`;
+   tile.append(name,stat);grid.append(tile);
+   if(grid.childElementCount===4)break;
+  }
+  section.hidden=!grid.childElementCount;
  }
  function draw(d){metrics(d.metrics,d);warning(d.caveats);
   if(page==='artist')setArtistView(true);
@@ -128,19 +180,45 @@
     else{charts().bars('main-chart',d.top,'name','streams','Total streams',true);
       charts().line('secondary-chart',d.history,[{key:'streams',label:'Daily streams'}]);}
     charts().calendar('calendar-heatmap',isAlbum?[]:d.history);
-    if(hasMeasure(d.status,'value')){
-     panelTitle('third-chart','New vs Returning Top 10','Entry-status distribution on the latest observed chart date');
-     charts().doughnut('third-chart',d.status);
-    }else{
-     panelTitle('third-chart','Daily New Entries','Observed new chart entries across the filtered period');
-     charts().line('third-chart',d.history,[{key:'new_entries',label:'New entries'}]);
-    }
+    panelTitle('third-chart','New Entries Over Time','Number of newly charting tracks on each recorded date');
+    charts().line('third-chart',d.history,[{key:'new_entries',label:'New entries'}]);
     showPanel('main-chart',hasMeasure(d.top,isAlbum?'best_rank':'streams'));
     showPanel('secondary-chart',hasMeasure(d.history,isAlbum?'albums':'streams'));
     showPanel('calendar-heatmap',!isAlbum&&hasMeasure(d.history,'streams'));
-    showPanel('third-chart',hasMeasure(d.status,'value')||hasMeasure(d.history,'new_entries'));
+    showPanel('third-chart',hasMeasure(d.history,'new_entries'));
     table('main-table',d.top,isAlbum?[['name','Album'],['best_rank','Best Rank','integer'],['weeks','Weeks','integer']]:
      [['name','Track'],['streams','Total Streams','compact'],['best_rank','Best Rank','integer']]);
+  }else if(page==='weekly'){
+    // Global artist selection persists across pages. Show only two artist-specific
+    // charts when an artist is selected; otherwise show the three requested
+    // overall weekly charts. Do not silently substitute other chart types.
+    const artistSelected=Boolean(filter().read('artist',''));
+    const chartGrid=$('dashboard-visuals');
+    if(chartGrid)chartGrid.classList.toggle('weekly-artist-mode',artistSelected);
+    const rankRows=d.rank_distribution||[];
+    if(artistSelected){
+      charts().bars('main-chart',d.top,'name','best_rank','Best weekly rank (lower is better)',true);
+      charts().bars('sixth-chart',rankRows,'band','observations','Weekly album appearances',false);
+    }else{
+      charts().line('fourth-chart',d.history,[{key:'new_entries',label:'New album entries'}]);
+      charts().line('fifth-chart',d.history,[{key:'avg_top10_weeks',label:'Average weeks on chart of Top 10 albums'}]);
+      charts().bars('sixth-chart',rankRows,'band','observations','Weekly album appearances',false);
+    }
+    showPanel('main-chart',artistSelected && hasMeasure(d.top,'best_rank'));
+    showPanel('secondary-chart',false);
+    showPanel('third-chart',false);
+    showPanel('fourth-chart',!artistSelected && hasMeasure(d.history,'new_entries') &&
+      (d.history||[]).some(x=>Number(x.new_entries)>0));
+    showPanel('fifth-chart',!artistSelected && hasMeasure(d.history,'avg_top10_weeks'));
+    showPanel('sixth-chart',hasMeasure(rankRows,'observations') &&
+      rankRows.some(x=>Number(x.observations)>0));
+    const best=(d.top||[])[0];
+    const title=$('album-feature-name'),meta=$('album-feature-meta'),cover=$('album-cover-initial'),spotlight=$('album-spotlight');
+    if(spotlight)spotlight.hidden=!best;
+    if(best){content(title,best.name);content(meta,`Best chart position: #${best.best_rank} · Maximum weeks on chart: ${best.weeks??'unknown'}`);
+      content(cover,String(best.name||'♪').trim().slice(0,1).toUpperCase());
+      renderAlbumArtwork(best);renderAlbumGallery(d.leaders||[]);}
+    else renderAlbumGallery([]);
   }else if(page==='regional'){
     charts().bars('main-chart',d.top_artists,'name','avg_rank','Average rank',true);
     charts().stacked('secondary-chart',d.labels);
@@ -184,7 +262,8 @@
       ['peak_rank','Peak Rank','integer'],['improvement','Rank Improvement','integer'],['days','Chart Longevity','integer']]);
   }else if(page==='artist'){
     content($('selected-artist-name'),d.artist?`${d.artist.artist_name||'Unknown artist'}`:'No artist found');
-    charts().map('artist-map',d.reach,'streams');
+    const topMarkets=(d.reach||[]).filter(r=>r.code&&r.streams!==null&&r.streams!==undefined).sort((a,b)=>Number(b.streams)-Number(a.streams)).slice(0,8);
+    charts().bars('artist-market-chart',topMarkets,'code','streams','Credited streams',true);
     charts().line('main-chart',d.daily,[{key:'streams',label:'Credited daily streams'}]);
     if(hasMeasure(d.albums,'weeks')){
      panelTitle('secondary-chart','Album Chart Longevity','Recorded weeks on chart for attributed albums');
@@ -193,7 +272,7 @@
      panelTitle('secondary-chart','Leading Artist Chart Markets','Countries ranked by credited streams in the selected period');
      charts().bars('secondary-chart',d.reach.slice(0,12),'code','streams','Credited streams',true);
     }
-    showPanel('artist-map',hasMappedMeasure(d.reach,'streams'));
+    showPanel('artist-market-chart',hasMeasure(d.reach,'streams'));
     showPanel('main-chart',hasMeasure(d.daily,'streams'));
     showPanel('secondary-chart',hasMeasure(d.albums,'weeks')||hasMeasure(d.reach,'streams'));
     table('main-table',d.reach,[['code','Country'],['chart_days','Chart Days','integer'],['streams','Credited Streams','compact']]);
@@ -286,7 +365,7 @@
   });
  }
  async function start(){try{filter().setup(refresh);
-   const meta=await get('/api/metadata/');filter().bounds(meta.bounds);
+   const meta=await get(page==='weekly'?'/api/metadata/weekly/':'/api/metadata/');filter().bounds(meta.bounds);
    content($('data-updated'),`Data through ${String(meta.bounds.latest).slice(0,10)}`);
    artistPicker();$('track')?.addEventListener('change',refresh);await refresh();
   }catch(e){content($('loading'),'');$('error').hidden=false;content($('error'),e.message);}}

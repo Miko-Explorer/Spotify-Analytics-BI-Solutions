@@ -23,9 +23,16 @@
    const x=entries||[];
    update(id,'line',{labels:x.map(r=>String(r.day).slice(0,10)),datasets:series.map((s,i)=>({
     label:s.label,data:x.map(r=>r[s.key]??null),borderColor:i?C.blue:C.green,
-    backgroundColor:i?'#77b9ff14':'#1ed76018',pointRadius:x.length<35?2:0,
+    backgroundColor:i?'#77b9ff14':'#1ed76018',
+    pointRadius:3,pointHoverRadius:7,pointHitRadius:14,
+    pointBackgroundColor:i?C.blue:C.green,pointBorderColor:C.dark,
+    pointBorderWidth:1.5,pointHoverBorderColor:'#ffffff',pointHoverBorderWidth:2,
     tension:.18,spanGaps:false,borderWidth:2,fill:i===0
-   }))},{scales:{x:{ticks:{color:C.ink,maxTicksLimit:9}},y:{reverse,ticks:{color:C.ink},grid:{color:'#303b33'}}}});
+   }))},{
+     interaction:{mode:'index',intersect:false},
+     plugins:{tooltip:{backgroundColor:'#292d2c',mode:'index',intersect:false}},
+     scales:{x:{ticks:{color:C.ink,maxTicksLimit:9}},y:{reverse,ticks:{color:C.ink},grid:{color:'#303b33'}}}
+   });
  }
  function bars(id,items,labelKey,valueKey,label,horizontal=false){
    const r=items||[];update(id,'bar',{labels:r.map(x=>String(x[labelKey]||'Unknown').slice(0,38)),datasets:[{
@@ -93,7 +100,7 @@
  function clearAll(){
   for(const [id,chart] of instances){chart.destroy();const el=document.getElementById(id);if(el)el.style.display='none';}
   instances.clear();
-  for(const id of ['main-chart','secondary-chart','third-chart','fourth-chart','regional-map','artist-map','label-box','calendar-heatmap']){
+  for(const id of ['main-chart','secondary-chart','third-chart','fourth-chart','fifth-chart','sixth-chart','regional-map','artist-map','label-box','calendar-heatmap']){
    const el=document.getElementById(id);if(!el)continue;
    if(window.Chart?.getChart(el))window.Chart.getChart(el).destroy();
    if(el.classList.contains('js-plotly-plot')&&window.Plotly)window.Plotly.purge(el);

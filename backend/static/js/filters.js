@@ -7,6 +7,7 @@
  const storage=key=>privateKeys.has(key)?sessionStorage:localStorage;
  const save=(key,value)=>{try{storage(key).setItem('spotify_v5_'+key,value);}catch(e){}};
  const read=(key,fallback)=>{try{return storage(key).getItem('spotify_v5_'+key)??fallback;}catch(e){return fallback;}};
+ const scopeKey=()=>page==='weekly'?'weekly_scope':'scope';
  const iso=d=>d.toISOString().slice(0,10);
  const page=document.body.dataset.page;
  const dated=()=>{
@@ -20,7 +21,7 @@
   return {};
  };
  function get(){
-  const p=new URLSearchParams(),country=$('country')?.value,scope=$('scope')?.value||'daily';
+  const p=new URLSearchParams(),country=$('country')?.value,scope=page==='weekly'?'weekly':($('scope')?.value||'daily');
   if(country)p.set('country',scope==='yearly'&&page==='global'?'GLOBAL':country);
   if($('scope'))p.set('scope',scope);
   const artist=read('artist','');if(artist)p.set('artist_id',artist);
@@ -50,15 +51,15 @@
    });
   }
   const scope=$('scope');if(scope){
-   const previous=fromURL.get('scope')||read('scope','daily');
-   scope.value=[...scope.options].some(o=>o.value===previous)?previous:'daily';
-   scope.addEventListener('change',()=>{save('scope',scope.value);onChange();});
+   const previous=page==='weekly'?'weekly':((fromURL.get('scope')||read('scope','daily'))==='weekly'?'daily':(fromURL.get('scope')||read('scope','daily')));
+   scope.value=[...scope.options].some(o=>o.value===previous)?previous:(page==='weekly'?'weekly':'daily');
+   scope.addEventListener('change',()=>{save(scopeKey(),scope.value);onChange();});
   }
   $('country')?.addEventListener('change',()=>{save('country_'+page,$('country').value);onChange();});
   $('reset-filters')?.addEventListener('click',()=>{
    if(period){period.value='all';save('period','all');$('custom-range').hidden=true;
     $('start-date').value='';$('end-date').value='';}
-   if(scope){scope.value='daily';save('scope','daily');}
+   if(scope){scope.value=page==='weekly'?'weekly':'daily';save(scopeKey(),scope.value);}
    save('country_'+page,page==='artist'?'ALL':page==='regional'?'PH':'GLOBAL');onChange();
   });
   const disclose=$('filter-disclosure');if(disclose){
@@ -74,9 +75,9 @@
   if(scope){
    const previous=scope.value;
    scope.replaceChildren();for(const x of data.scopes||[]){scope.add(new Option(x.label,x.value));}
-   scope.value=[...scope.options].some(o=>o.value===previous)?previous:'daily';
+   scope.value=[...scope.options].some(o=>o.value===previous)?previous:(page==='weekly'?'weekly':'daily');
    if(scope.selectedIndex<0)scope.selectedIndex=0;
-   save('scope',scope.value);
+   save(scopeKey(),scope.value);
    const wrap=$('scope-filter');if(wrap)wrap.hidden=scope.options.length<=1;
   }
   if(select){
@@ -94,6 +95,7 @@
    const wrap=$('country-filter');if(wrap)wrap.hidden=(scope?.value==='yearly' && page==='global') || select.options.length===0;
   }
   const msg=$('filter-note');if(msg){
+   msg.hidden=page==='weekly'||page==='global';
    const note=(data.notes||[]).join(' ');
    msg.textContent=(data.countries||[]).length?note:'No chart observations match the selected artist and date range. Clear the artist selection or reset the dates.';
   }

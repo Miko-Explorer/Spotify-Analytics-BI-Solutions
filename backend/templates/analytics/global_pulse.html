@@ -4,10 +4,10 @@
 {% block controls %}{% include 'partials/date_filters.html' with show_scope=True %}{% endblock %}
 {% block content %}
 <div class="dashboard-grid">
- {% include 'partials/chart.html' with chart_id='main-chart' heading='Top 10 Tracks by Total Streams' description='Highest aggregate stream volume in the selected country and time scope' badge='TOP TRACKS' extra_class='span-6' %}
- {% include 'partials/chart.html' with chart_id='secondary-chart' heading='Daily Stream Trend' description='Observed streams over the selected analysis period' badge='STREAM TREND' extra_class='span-6' %}
+ {% include 'partials/chart.html' with chart_id='main-chart' heading='Top 10 Tracks by Total Streams' description='Songs with the most recorded streams in the chosen dates and country' badge='TOP TRACKS' extra_class='span-6' %}
+ {% include 'partials/chart.html' with chart_id='secondary-chart' heading='Daily Stream Trend' description='Tracks how many streams were recorded each day; rising lines mean greater charted activity' badge='STREAM TREND' extra_class='span-6' %}
  <section class="card span-6"><div class="chart-head"><div><h2>Stream Volume Calendar Heatmap</h2><p>Each cell represents one day; greater intensity means more streams</p></div><span class="chart-tag">HEATMAP</span></div><div id="calendar-heatmap" class="heatmap"></div></section>
- {% include 'partials/chart.html' with chart_id='third-chart' heading='New vs Returning Top 10' description='NEW chart entries compared with continuing or returning tracks on the latest chart date' badge='TOP 10' extra_class='span-6' %}
+ {% include 'partials/chart.html' with chart_id='third-chart' heading='New Entries Over Time' description='Daily number of newly charting tracks; use the trend to see when fresh music arrives' badge='NEW ENTRIES' extra_class='span-6' %}
 </div>
 {% include 'partials/detail_table.html' with heading='Detailed Track Performance' description='Streams, credited artists, rankings, and chart longevity' %}
 {% endblock %}

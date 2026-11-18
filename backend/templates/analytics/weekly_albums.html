@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block eyebrow %}WEEKLY CHART INTELLIGENCE · 05{% endblock %}
+{% block subtitle %}Album rankings, weekly chart presence, and staying power{% endblock %}
+{% block controls %}{% include 'partials/date_filters.html' %}{% endblock %}
+{% block content %}
+<section class="album-spotlight card" id="album-spotlight" aria-label="Top charted album">
+ <div class="album-cover-art" id="album-cover-art" aria-label="Album cover preview when available"><span id="album-cover-initial">♪</span></div>
+ <div class="album-feature-content"><p class="reader-eyebrow">TOP CHARTED ALBUM</p><h2 id="album-feature-name">Select a market to view its leading album</h2><p id="album-feature-meta">Best rank and chart longevity will appear here.</p></div>
+ <div class="vinyl" aria-hidden="true"><div class="vinyl-label"></div></div>
+</section>
+<section class="card album-gallery" id="album-gallery" aria-label="Long-running album artwork" hidden>
+ <div class="chart-head"><div><h2>Long-Running Albums</h2><p>Official Spotify album previews for albums appearing in the weekly chart</p></div></div>
+ <div id="album-gallery-grid" class="album-gallery-grid"></div>
+</section>
+<div class="dashboard-grid" id="dashboard-visuals">
+ {% include 'partials/chart.html' with chart_id='main-chart' heading='Top 10 Albums by Best Chart Position' description='Best recorded weekly rank for each album; smaller ranks mean stronger positions' badge='TOP ALBUMS' extra_class='span-6' %}
+ {% include 'partials/chart.html' with chart_id='secondary-chart' heading='Albums Appearing Each Week' description='Changes in the number of album records observed on each weekly chart date' badge='WEEKLY ACTIVITY' extra_class='span-6' %}
+ {% include 'partials/chart.html' with chart_id='third-chart' heading='Albums with the Longest Chart History' description='Highest reported weeks-on-chart for each album in the filtered period' badge='LONGEVITY' extra_class='span-6' %}
+ {% include 'partials/chart.html' with chart_id='fourth-chart' heading='New Albums on the Weekly Chart' description='Weekly count of album records marked NEW, across the entire selected period' badge='NEW ENTRIES' extra_class='span-12 weekly-wide-trend' %}
+ {% include 'partials/chart.html' with chart_id='fifth-chart' heading='Top 10 Album Staying Power Over Time' description='Average weeks on chart among the ten highest-ranked albums for each observed week. Higher values indicate a more established Top 10.' badge='TOP 10 LONGEVITY' extra_class='span-12 weekly-wide-trend' %}
+ {% include 'partials/chart.html' with chart_id='sixth-chart' heading='Where Albums Rank on the Weekly Chart' description='Number of weekly album appearances in each chart-position group for the selected artist, market, and dates. A lower rank means stronger placement.' badge='CHART POSITION MIX' extra_class='span-12 weekly-rank-distribution' %}
+</div>
+{% include 'partials/detail_table.html' with heading='Weekly Album Records' description='Albums, best weekly position, observed chart weeks, and longest reported run' %}
+{% endblock %}

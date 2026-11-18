@@ -13,6 +13,7 @@ SCHEMAS = {
     'velocity': [('track', 'Track'), ('label', 'Record label'), ('entry_rank', 'Entry rank'),
                  ('peak_rank', 'Peak rank'), ('improvement', 'Improvement'),
                  ('days_on_chart', 'Chart days'), ('streak', 'Consecutive days')],
+    'weekly': [('album','Album'),('best_rank','Best rank'),('weeks','Weeks on chart'),('observed_weeks','Observed chart weeks')],
     'artist': [('track', 'Track'), ('streams', 'Credited streams'), ('best_rank', 'Best rank'),
                ('peak_rank', 'Peak rank'), ('days_on_chart', 'Chart days'), ('markets', 'Markets')],
 }
@@ -31,7 +32,7 @@ def detail_table(page, country='GLOBAL', start=None, end=None, artist_id=None,
     columns = SCHEMAS[page]
     allowed = {key for key, _ in columns}
     sort = sort if sort in allowed else {'global': 'streams','regional': 'streams',
-                                        'velocity': 'improvement','artist': 'streams'}[page]
+                                        'velocity': 'improvement','artist': 'streams','weekly': 'best_rank'}[page]
     offset = (page_number-1)*page_size
     pattern = '%' + search.replace('\\','\\\\').replace('%','\\%').replace('_','\\_') + '%'
     dw, date_args = dates('d.full_date',start,end)
@@ -40,7 +41,27 @@ def detail_table(page, country='GLOBAL', start=None, end=None, artist_id=None,
     artist_args = [artist_id] if artist_id else []
     caveat = None
 
-    if page == 'global':
+    if page == 'weekly':
+        from .queries import album_bridge_present
+        if artist_id is not None and not album_bridge_present():
+            return {'columns': columns, 'rows': [], 'page': page_number, 'has_next': False,
+                    'note': 'Album-to-artist bridge is required for this filter.'}
+        linked=(' AND EXISTS (SELECT 1 FROM bridge_album_artist ab WHERE ab.album_id=f.album_id '
+                'AND ab.artist_id=%s)') if artist_id is not None else ''
+        sql=f'''SELECT COALESCE(al.album_name,'Unknown album') album,
+            MIN(f.`rank`) best_rank,MAX(f.weeks_on_chart) weeks,
+            COUNT(DISTINCT d.full_date) observed_weeks
+            FROM fact_album_performance f
+            JOIN dim_album al ON al.album_id=f.album_id
+            JOIN dim_date d ON d.date_id=f.date_id
+            JOIN dim_geography g ON g.geo_id=f.geo_id
+            WHERE g.country_code=%s AND {dw}{linked}
+              AND COALESCE(al.album_name,'') LIKE %s
+            GROUP BY f.album_id,al.album_name'''
+        args=[country,*date_args,*artist_args,pattern]
+        caveat='Weekly chart data does not contain album stream counts.'
+    elif page == 'global':
+
         if scope == 'weekly':
             if artist_id:
                 bridge=one("SELECT COUNT(*) n FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='bridge_album_artist'")

@@ -7,5 +7,5 @@
   <div class="custom-range" id="custom-range" hidden><label class="filter-item">From<input id="start-date" type="date"></label><label class="filter-item">To<input id="end-date" type="date"></label><button type="button" class="primary-button" id="apply-dates">Apply</button></div>
   <button type="button" class="secondary-button" id="reset-filters">Reset filters</button>
  </div>
- <p class="filter-note" id="filter-note" role="status" aria-live="polite"></p>
+ <p class="filter-note" id="filter-note" role="status" aria-live="polite" {% if page == 'weekly' or page == 'global' %}hidden{% endif %}></p>
 </details>

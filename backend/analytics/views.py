@@ -12,6 +12,7 @@ PAGES = {
     'regional': ('Regional Rhythms', 'analytics/regional_rhythms.html'),
     'velocity': ('Hit Velocity & Longevity', 'analytics/hit_velocity.html'),
     'artist': ('Artist Deep-Dive', 'analytics/artist_deep_dive.html'),
+    'weekly': ('Weekly Album Insights', 'analytics/weekly_albums.html'),
 }
 
 def _inputs(request, page=None):
@@ -38,6 +39,10 @@ def _inputs(request, page=None):
             'track_id': integer('track_id'), 'start': start, 'end': end}
 
 @require_GET
+def guide(request):
+    return render(request, 'analytics/guide.html', {'page':'guide','title':'Getting Started'})
+
+@require_GET
 def dashboard(request, page='global'):
     if page not in PAGES: raise Http404('Unknown page')
     title, template = PAGES[page]
@@ -49,18 +54,21 @@ def dashboard_data(request, page):
     try:
         p = _inputs(request, page)
         c, a, s, e = p['country'], p['artist_id'], p['start'], p['end']
-        if page != 'global' and p['scope'] != 'daily':
+        if page not in ('global', 'weekly') and p['scope'] != 'daily':
             raise ValueError('This dashboard supports Daily Songs only')
         if page == 'artist' and a is None:
             return JsonResponse({'selection_required': True, 'artist': None, 'metrics': [],
                                  'daily': [], 'reach': [], 'albums': [], 'caveats': []})
-        if page == 'global': data = queries.global_pulse(c,s,e,a,p['scope'])
+        if page == 'global' and p['scope'] == 'weekly':
+            raise ValueError('Weekly album charts have a dedicated dashboard.')
+        if page == 'weekly': data = queries.weekly_album_insights(c,s,e,a)
+        elif page == 'global': data = queries.global_pulse(c,s,e,a,p['scope'])
         elif page == 'regional':
             if c == 'GLOBAL': raise ValueError('Select an individual country for Regional Rhythms')
             data = queries.regional(c,s,e,a)
         elif page == 'velocity': data = queries.velocity(c,s,e,a,p['track_id'],p['scope'])
         else: data = queries.artist_detail(a,c,s,e)
-        return JsonResponse(data, encoder=DjangoJSONEncoder)
+        return JsonResponse(queries.apply_kpi_thresholds(data), encoder=DjangoJSONEncoder)
     except ValueError as exc:
         return JsonResponse({'error': str(exc)}, status=400)
     except DatabaseError:
@@ -82,6 +90,11 @@ def markets(request):
 def metadata(request):
     try:return JsonResponse({'bounds':queries.history_bounds()},encoder=DjangoJSONEncoder)
     except DatabaseError:return JsonResponse({'error':'Warehouse metadata unavailable'},status=503)
+
+@require_GET
+def weekly_metadata(request):
+    try: return JsonResponse({'bounds':queries.weekly_album_bounds()},encoder=DjangoJSONEncoder)
+    except DatabaseError: return JsonResponse({'error':'Weekly album metadata unavailable'},status=503)
 
 @require_GET
 def health(request):
@@ -135,7 +148,18 @@ def filter_options(request, page):
             return JsonResponse({'selection_required': True, 'countries': [],
                                  'scopes': [{'value': 'daily', 'label': 'Daily Songs'}],
                                  'notes': ['Select an artist to enable market filters.']})
-        results = queries.filter_availability(page, p['artist_id'], p['start'], p['end'], p['scope'])
+        if page == 'weekly':
+            available = queries.weekly_album_markets(p['artist_id'],p['start'],p['end'])
+            results = {'countries': available,
+                       'scopes': [{'value': 'weekly', 'label': 'Weekly Albums'}],
+                       'notes': []}
+        else:
+            results = queries.filter_availability(page, p['artist_id'], p['start'], p['end'], p['scope'])
+            if page in ('global','velocity'):
+                results['notes'] = [n for n in results.get('notes',[]) if 'Weekly Album' not in n and 'weekly album' not in n]
+            if page == 'global':
+                results['scopes'] = [x for x in results.get('scopes',[]) if x.get('value') != 'weekly']
+                results['notes'] = [n for n in results.get('notes',[]) if 'Weekly Album' not in n and 'weekly album' not in n]
         return JsonResponse(results, encoder=DjangoJSONEncoder)
     except ValueError as exc:
         return JsonResponse({'error':str(exc)}, status=400)

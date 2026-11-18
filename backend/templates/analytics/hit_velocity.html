@@ -5,10 +5,10 @@
 {% endblock %}
 {% block content %}
 <div class="dashboard-grid">
- {% include 'partials/chart.html' with chart_id='main-chart' heading='Entry Rank vs Peak Rank' description='Lower peak ranks show climbing success; diagonal means no improvement' badge='SCATTER' extra_class='span-6' %}
- <section class="card span-6"><div class="chart-head"><div><h2>Chart Longevity by Record Label</h2><p>Box plot of track chart-days grouped by label</p></div><span class="chart-tag">BOX PLOT</span></div><div id="label-box" class="plot-map"></div></section>
- {% include 'partials/chart.html' with chart_id='third-chart' heading='Consecutive Chart Streak Lengths' description='Histogram of maximum consecutive days' badge='HISTOGRAM' extra_class='span-6' %}
- {% include 'partials/chart.html' with chart_id='fourth-chart' heading='Daily Rank Movement' description='Lower rank is better; previous rank shown as comparison' badge='RANK TREND' extra_class='span-6' %}
+ {% include 'partials/chart.html' with chart_id='main-chart' heading='Entry Rank vs Peak Rank' description='Compares starting and best chart positions; lower peak ranks show stronger placement' badge='SCATTER' extra_class='span-6' %}
+ <section class="card span-6"><div class="chart-head"><div><h2>Chart Longevity by Record Label</h2><p>Shows how long songs from each record label remain on the charts</p></div><span class="chart-tag">BOX PLOT</span></div><div id="label-box" class="plot-map"></div></section>
+ {% include 'partials/chart.html' with chart_id='third-chart' heading='Consecutive Chart Streak Lengths' description='Groups songs by the length of their uninterrupted daily chart runs' badge='HISTOGRAM' extra_class='span-6' %}
+ {% include 'partials/chart.html' with chart_id='fourth-chart' heading='Daily Rank Movement' description='Tracks each selected song’s position; rank number 1 is the top position' badge='RANK TREND' extra_class='span-6' %}
 </div>
 {% include 'partials/detail_table.html' with heading='Detailed Hit Velocity and Longevity' description='Track ranking, improvement, and consecutive streak data' %}
 {% endblock %}

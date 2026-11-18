@@ -34,6 +34,79 @@ def metric(label, value, fmt='integer', status=None, note=None):
     return dict(label=label, value=value, format=fmt, status=status, note=note)
 
 
+def kpi_thresholds():
+    """Use the warehouse's configured KPI thresholds, never client-side invented cutoffs.
+
+    A missing or unpopulated threshold table leaves other dashboard values unchanged.
+    """
+    try:
+        return {r['kpi_name']: r for r in rows("""SELECT kpi_name, threshold_type,
+            high_value, moderate_upper, moderate_lower, low_value, description
+            FROM fact_kpi_thresholds""")}
+    except Exception as exc:
+        # Older deployed warehouses may not yet include threshold configuration.
+        from django.db import DatabaseError
+        if isinstance(exc, DatabaseError):
+            return {}
+        raise
+
+
+def apply_kpi_thresholds(data):
+    """Attach interpretation metadata to KPI objects; preserve values and existing status.
+
+    The three warehouse rules have different numeric meanings. Respect the
+    documented rank direction and the percentage-baseline measure's own units.
+    """
+    configurations = kpi_thresholds()
+    for item in data.get('metrics', []):
+        name = item.get('label')
+        number = item.get('value')
+        if number is None:
+            continue
+        if name not in configurations:
+            continue
+        try:
+            number = float(number)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        conf = configurations[name]
+        hi = conf.get('high_value')
+        lo = conf.get('low_value')
+        if hi is None or lo is None:
+            continue
+        hi, lo = float(hi), float(lo)
+        if name == 'Top 10 Chart Strength':
+            # A smaller chart rank is stronger. moderate_upper is the middle-to-weak boundary.
+            upper = float(conf['moderate_upper']) if conf.get('moderate_upper') is not None else lo
+            if number <= hi:
+                classification, tone = 'Strong', 'positive'
+            elif number <= upper:
+                classification, tone = 'Moderate', 'neutral'
+            else:
+                classification, tone = 'Weak', 'negative'
+        elif name == 'Stream Momentum':
+            if number > hi:
+                classification, tone = 'Rising', 'positive'
+            elif number < lo:
+                classification, tone = 'Falling', 'negative'
+            else:
+                classification, tone = 'Stable', 'neutral'
+        elif name == 'New Entries vs Historical Baseline':
+            if number > hi:
+                classification, tone = 'High', 'positive'
+            elif number < lo:
+                classification, tone = 'Low', 'negative'
+            else:
+                classification, tone = 'Normal', 'neutral'
+        else:
+            continue
+        item['status'] = classification
+        item['tone'] = tone
+        item['threshold_description'] = conf.get('description') or ''
+        item['threshold_source'] = 'MySQL fact_kpi_thresholds'
+    return data
+
+
 def movement(value):
     if value is None: return None
     return 'Rising' if value > 5 else 'Falling' if value < -5 else 'Stable'
@@ -107,6 +180,88 @@ def weekly_albums(country, start, end, artist_id=None, kind='global'):
                    average_album_streak,
                    'decimal',note='Average of each eligible album’s maximum consecutive weeks')],caveats=[caveat])
 
+
+
+
+def weekly_album_insights(country='GLOBAL', start=None, end=None, artist_id=None):
+    # Independent album-only analytics; rank and weeks are never treated as streams or days.
+    where, params = dates('d.full_date', start, end)
+    if artist_id is not None and not album_bridge_present():
+        return {'metrics': [], 'history': [], 'top': [], 'leaders': [], 'caveats':
+                ['Album artist attribution requires the optional album-to-artist bridge.']}
+    credit = (' AND EXISTS (SELECT 1 FROM bridge_album_artist b WHERE b.album_id=f.album_id '
+              'AND b.artist_id=%s)') if artist_id is not None else ''
+    args = [country, *params, *([artist_id] if artist_id is not None else [])]
+    base = f'''FROM fact_album_performance f
+        JOIN dim_date d ON d.date_id=f.date_id
+        JOIN dim_geography g ON g.geo_id=f.geo_id
+        JOIN dim_album al ON al.album_id=f.album_id
+        LEFT JOIN dim_entry_status es ON es.status_id=f.entry_status_id
+        WHERE g.country_code=%s AND {where}{credit}'''
+    history = rows(f'''SELECT d.full_date day, COUNT(*) albums,
+        COUNT(DISTINCT f.album_id) unique_albums,
+        SUM(CASE WHEN es.status_name='NEW' THEN 1 ELSE 0 END) new_entries,
+        ROUND(AVG(CASE WHEN f.`rank` BETWEEN 1 AND 10 THEN f.weeks_on_chart END), 2) avg_top10_weeks
+        {base} GROUP BY d.full_date ORDER BY d.full_date''', args)
+    top = rows(f'''SELECT f.album_id, al.album_uri, COALESCE(al.album_name,'Unknown album') name,
+        MIN(f.`rank`) best_rank, MAX(f.weeks_on_chart) weeks,
+        MAX(f.consecutive_weeks) streak, COUNT(DISTINCT d.full_date) observed_weeks
+        {base} GROUP BY f.album_id,al.album_name ORDER BY best_rank, weeks DESC LIMIT 10''',args)
+    leaders = rows(f'''SELECT f.album_id,al.album_uri,COALESCE(al.album_name,'Unknown album') name,
+        MAX(f.weeks_on_chart) weeks,MIN(f.`rank`) best_rank
+        {base} GROUP BY f.album_id,al.album_name ORDER BY weeks DESC, best_rank LIMIT 10''',args)
+    totals = one(f'''SELECT COUNT(DISTINCT f.album_id) distinct_albums,
+        COUNT(DISTINCT CASE WHEN f.`rank`=1 THEN f.album_id END) number_one_albums, MAX(f.weeks_on_chart) longest_weeks {base}''',args)
+    # Count actual weekly album appearances by chart-position band. This stays
+    # useful even if a selected artist has one album or constant rank/longevity.
+    # Apply exactly the same date, country, and artist filters as the other charts.
+    rank_counts = rows(f'''SELECT
+        CASE WHEN f.`rank` = 1 THEN 'Number 1'
+             WHEN f.`rank` BETWEEN 2 AND 10 THEN 'Top 2-10'
+             WHEN f.`rank` BETWEEN 11 AND 50 THEN 'Rank 11-50'
+             WHEN f.`rank` BETWEEN 51 AND 100 THEN 'Rank 51-100'
+             ELSE 'Rank 101+' END rank_band,
+        COUNT(*) observations
+        {base} AND f.`rank` IS NOT NULL
+        GROUP BY rank_band''', args)
+    rank_map = {item['rank_band']: item['observations'] for item in rank_counts}
+    rank_distribution = [dict(band=band, observations=rank_map.get(band, 0)) for band in
+                         ('Number 1', 'Top 2-10', 'Rank 11-50', 'Rank 51-100', 'Rank 101+')]
+    if not rank_counts:
+        rank_distribution = []
+    date_count=len(history)
+    return dict(country=country, scope='weekly', history=history, top=top, leaders=leaders,
+        rank_distribution=rank_distribution,
+        period={'from':history[0]['day'] if history else None,
+                'to':history[-1]['day'] if history else None},
+        metrics=[metric('Unique Charting Albums',totals.get('distinct_albums'),'integer',
+                        note='Distinct albums appearing in selected weekly charts'),
+                 metric('Observed Chart Weeks',date_count,'integer',
+                        note='Number of weekly chart dates present in selected period'),
+                 metric('Best Longevity (Weeks)',totals.get('longest_weeks'),'integer',
+                        note='Longest reported weeks-on-chart among matching albums'),
+                 metric('Albums Reaching #1',totals.get('number_one_albums'),'integer',
+                        note='Distinct albums ranked first at least once during the selection')],
+        caveats=[])
+
+
+def weekly_album_bounds():
+    return one('''SELECT MIN(d.full_date) earliest, MAX(d.full_date) latest
+        FROM fact_album_performance f JOIN dim_date d ON d.date_id=f.date_id''')
+
+def weekly_album_markets(artist_id=None, start=None, end=None):
+    where, params=dates('d.full_date',start,end)
+    credit=(' AND EXISTS (SELECT 1 FROM bridge_album_artist b WHERE b.album_id=f.album_id '
+            'AND b.artist_id=%s)') if artist_id is not None else ''
+    if artist_id is not None and not album_bridge_present():
+        return []
+    return rows(f'''SELECT g.country_code code,g.country_name name
+       FROM fact_album_performance f
+       JOIN dim_date d ON d.date_id=f.date_id
+       JOIN dim_geography g ON g.geo_id=f.geo_id
+       WHERE {where}{credit}
+       GROUP BY g.country_code,g.country_name ORDER BY g.country_code''',
+       [*params,*([artist_id] if artist_id is not None else [])])
 
 def history_bounds():
     return one('SELECT MIN(summary_date) earliest, MAX(summary_date) latest FROM agg_daily_global_summary')

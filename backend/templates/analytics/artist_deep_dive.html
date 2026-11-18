@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block eyebrow %}ARTIST INTELLIGENCE · 04{% endblock %}
-{% block subtitle %}Streaming momentum, international chart footprint, and album staying power{% endblock %}
+{% block subtitle %}Streaming momentum, leading chart markets, and album staying power{% endblock %}
 {% block controls %}{% include 'partials/date_filters.html' %}{% endblock %}
 {% block content %}
 <section class="artist-intro" id="artist-empty-state" aria-labelledby="artist-empty-heading" hidden>
@@ -12,9 +12,9 @@
 </section>
 <p id="selected-artist-name" class="artist-context" hidden></p>
 <div class="dashboard-grid" id="dashboard-visuals">
- <section class="card span-4"><div class="chart-head"><div><h2>Artist Geographic Footprint</h2><p>Countries containing credited chart tracks, sized by allocated streams</p></div><span class="chart-tag">MAP</span></div><div id="artist-map" class="plot-map"></div></section>
- {% include 'partials/chart.html' with chart_id='main-chart' heading='Artist Daily Stream Trend' description='Equal attribution for songs with multiple credited artists' badge='DAILY STREAMS' extra_class='span-4' %}
- {% include 'partials/chart.html' with chart_id='secondary-chart' heading='Album Longevity Comparison' description='Albums by maximum weeks-on-chart; requires album-artist attribution bridge' badge='ALBUMS' extra_class='span-4' %}
+ {% include 'partials/chart.html' with chart_id='artist-market-chart' heading='Top Countries by Artist Streams' description='Countries with the most streams credited to this artist in the selected period' badge='TOP MARKETS' extra_class='span-4' %}
+ {% include 'partials/chart.html' with chart_id='main-chart' heading='Artist Daily Stream Trend' description='Shows daily streams credited to the selected artist; shared songs divide streams equally' badge='DAILY STREAMS' extra_class='span-4' %}
+ {% include 'partials/chart.html' with chart_id='secondary-chart' heading='Album Longevity Comparison' description='Compares the artist’s albums by reported weeks on chart when album attribution is available' badge='ALBUMS' extra_class='span-4' %}
 </div>
 {% include 'partials/detail_table.html' with heading='Detailed Artist Discography' description='Credited streams and chart performance of the selected artist' %}
 {% endblock %}
