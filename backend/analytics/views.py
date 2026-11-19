@@ -5,7 +5,9 @@ from django.db import connection, DatabaseError
 from django.http import Http404, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
+from django.conf import settings
 from . import queries, detail_tables
+from .warehouse_contract import REQUIRED_COLUMNS
 
 PAGES = {
     'global': ('Global Pulse', 'analytics/global_pulse.html'),
@@ -98,11 +100,18 @@ def weekly_metadata(request):
 
 @require_GET
 def health(request):
+    """Verify selected schema and SELECT access without reading warehouse records."""
     try:
         with connection.cursor() as c:
-            c.execute('SELECT COUNT(*) FROM agg_daily_global_summary')
-            count=c.fetchone()[0]
-        return JsonResponse({'status':'ok','global_days':count})
+            c.execute('SELECT DATABASE()')
+            if c.fetchone()[0] != settings.DW_EXPECTED_SCHEMA:
+                return JsonResponse({'status':'schema_mismatch'}, status=503)
+            for table, columns in REQUIRED_COLUMNS.items():
+                # Identifiers are a committed constant, never request parameters.
+                projection = ', '.join(f'`{column}`' for column in columns)
+                c.execute(f'SELECT {projection} FROM `{table}` WHERE 1=0')
+        return JsonResponse({'status':'ok','schema':settings.DW_EXPECTED_SCHEMA,
+                             'tables_verified':len(REQUIRED_COLUMNS)})
     except DatabaseError:return JsonResponse({'status':'database_unavailable'},status=503)
 
 

@@ -1,0 +1,13 @@
+# Production Linux CPython 3.14 (also resolves for 3.12). Full dependency pins.
+# Generated from pip resolution; CI must install this file.
+asgiref==3.13.0
+cffi==2.1.1
+cryptography==50.0.2
+Django==5.2.19
+gunicorn==27.0.1
+pycountry==26.2.16
+pycparser==3.12
+PyMySQL[rsa]==1.2.4
+python-dotenv==1.2.4
+sqlparse==0.6.1
+tzdata==2026.6
