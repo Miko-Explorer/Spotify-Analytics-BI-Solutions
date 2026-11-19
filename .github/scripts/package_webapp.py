@@ -34,7 +34,7 @@ def main():
             if stat.S_ISDIR(mode):
                 continue
             if (not stat.S_ISREG(mode) or path.suffix.lower() in {'.db', '.sqlite', '.sqlite3', '.pyc'}
-                    or not re.fullmatch(r'(app|vendor|static)/[A-Za-z0-9_+-][A-Za-z0-9_+./-]{0,235}', relative)):
+                    or not re.fullmatch(r'(app|vendor|static)/[A-Za-z0-9_+-][A-Za-z0-9_+@./-]{0,235}', relative)):
                 raise SystemExit(f'Unexpected release file: {relative}')
             size = path.stat().st_size
             total += size
